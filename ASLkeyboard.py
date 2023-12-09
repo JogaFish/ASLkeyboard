@@ -1,0 +1,61 @@
+import cv2
+import mediapipe as mp
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import load_model
+import datetime
+import pyautogui as gui
+
+FOLDER_NAME = "asl_data"
+
+cap = cv2.VideoCapture(0)
+
+mp_hands = mp.solutions.hands
+hands = mp_hands.Hands(max_num_hands=1)
+
+mpDraw = mp.solutions.drawing_utils
+
+# Load the gesture recognizer model
+model = load_model(FOLDER_NAME + "_model")
+
+classNames = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"]
+
+countList = []
+while True:
+    success, img = cap.read()
+    x, y, c = img.shape
+    img = cv2.flip(img, 1)
+    if not success:
+        break
+    results = hands.process(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    if results.multi_handedness and results.multi_hand_world_landmarks:
+        landmarks = [results.multi_handedness[0].classification[0].index]
+        timeCounter = 0
+        for hand_landmark in results.multi_hand_world_landmarks:
+            for lm in hand_landmark.landmark:
+                lmx = int(lm.x * x)
+                lmy = int(lm.y * y)
+                lmz = int(lm.z)
+                landmarks.append(lmx)
+                landmarks.append(lmy)
+                landmarks.append(lmz)
+            mpDraw.draw_landmarks(img, results.multi_hand_landmarks[0], mp_hands.HAND_CONNECTIONS)
+        prediction = model.predict([landmarks])
+        classID = np.argmax(prediction)
+        className = classNames[classID]
+
+        # show the prediction on the frame
+        cv2.putText(img, className, (10, 50), cv2.FONT_HERSHEY_SIMPLEX,
+                    1, (0, 0, 255), 2, cv2.LINE_AA)
+
+        countList.append(className)
+        if len(set(countList)) > 1:
+            countList = []
+        elif len(set(countList)) == 1 and len(countList) == 20:
+            gui.write(className)
+            countList = []
+
+    cv2.imshow("Image", img)
+    cv2.waitKey(1)
+cap.release()
+cv2.destroyAllWindows()
